@@ -14,32 +14,32 @@ function App() {
   useEffect(() => {
     const setup = async () => {
       try {
-        // SDK ko initialize karein [cite: 65, 108]
         await initSDK();
 
-        // Download progress track karne ke liye [cite: 140, 199]
-        EventBus.shared.on("model.downloadProgress", (evt) => {
-          const p = Math.round((evt.progress ?? 0) * 100);
-          setProgress(p);
-          setStatus(`Downloading: ${p}%`);
-        });
-
-        const modelId = "lfm2-350m-q4_k_m"; // Documentation wala model [cite: 26, 131]
+        const modelId = "lfm2-350m-q4_k_m";
         const models = ModelManager.getModels();
         const model = models.find((m) => m.id === modelId);
 
-        // Agar model download nahi hai toh download karein [cite: 72, 144]
         if (model) {
-          // Check karein ki kya model pehle se downloaded hai
-          if (model.status !== "downloaded" && model.status !== "loaded") {
-            setStatus("Downloading model for offline use...");
-            await ModelManager.downloadModel(modelId); // [cite: 73, 144]
-          } else {
-            setStatus("Model found in storage...");
+          // Check if the model has been downloaded before; if not, download it.
+          const modelDownloaded = localStorage.getItem("modelDownloaded");
+          if (!modelDownloaded) {
+            if (model.status !== "downloaded" && model.status !== "loaded") {
+              setStatus("Downloading model for offline use...");
+              await ModelManager.downloadModel(modelId);
+            } else {
+              setStatus("Model found in storage...");
+            }
+            // Mark that the model has been downloaded so we skip this step next time.
+            localStorage.setItem("modelDownloaded", "true");
           }
 
+          // Load the model on every app start (required before generation).
           setStatus("Loading model...");
-          await ModelManager.loadModel(modelId); // [cite: 76, 146]
+          await ModelManager.loadModel(modelId);
+          // Optionally keep a flag that the model is loaded for this session.
+          localStorage.setItem("modelLoaded", "true");
+
           setStatus("Offline AI Ready!");
           setReady(true);
         }
