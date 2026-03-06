@@ -1,7 +1,11 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { ModelManager, EventBus } from "@runanywhere/web";
 import { TextGeneration } from "@runanywhere/web-llamacpp";
 import { initSDK } from "./runanywhere";
+
+// Module-level singleton: prevents re-running setup on StrictMode double-mount
+// or any accidental re-render. Mirrors the same pattern used in initSDK().
+let _setupPromise: Promise<void> | null = null;
 
 function App() {
   const [ready, setReady] = useState(false);
@@ -11,62 +15,84 @@ function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
 
+  // Tracks whether THIS component instance has already subscribed to events,
+  // so we don't register duplicate listeners on StrictMode's second mount.
+  const listenerRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
-    // 1. Listener to track download progress
-    const unsubscribe = EventBus.shared.on("model.downloadProgress", (evt) => {
-      const p = Math.round((evt.progress ?? 0) * 100);
-      setProgress(p);
-      setStatus(`Downloading model: ${p}%`);
-    });
+    // Only subscribe once per component lifetime
+    if (!listenerRef.current) {
+      const unsubscribe = EventBus.shared.on("model.downloadProgress", (evt) => {
+        const p = Math.round((evt.progress ?? 0) * 100);
+        setProgress(p);
+        setStatus(`Downloading model: ${p}%`);
+      });
+      listenerRef.current = unsubscribe;
+    }
 
-    const setup = async () => {
-      try {
-        await initSDK();
+    const modelId = "lfm2-350m-q4_k_m";
 
-        const modelId = "lfm2-350m-q4_k_m";
+    // If setup is already running (or finished), just attach to the existing
+    // promise so the UI stays in sync without restarting the whole process.
+    if (!_setupPromise) {
+      _setupPromise = (async () => {
+        try {
+          await initSDK();
 
-        // 2. Check storage info and model status
-        setStatus("Checking model storage...");
-        const storageInfo = await ModelManager.getStorageInfo();
-        console.log("Storage info:", storageInfo);
+          setStatus("Checking model storage...");
+          const storageInfo = await ModelManager.getStorageInfo();
+          console.log("Storage info:", storageInfo);
 
-        // Check if model is already downloaded
-        const models = ModelManager.getModels();
-        const targetModel = models.find((m) => m.id === modelId);
-        console.log("Model status:", targetModel?.status);
+          // NOTE: ModelManager.getModels() returns *in-memory* status only.
+          // After every page reload it resets to "registered" even if the model
+          // file is already saved in OPFS — so status checks like
+          // targetModel.status === "downloaded" are unreliable across refreshes.
+          //
+          // Instead we check OPFS directly via storageInfo.totalSize.
+          // The model file is 229,309,376 bytes (~218.7 MB); if OPFS already
+          // holds at least that many bytes, the download can be safely skipped.
+          const MODEL_FILE_SIZE = 229_309_376; // bytes
+          const isModelCached = storageInfo.totalSize >= MODEL_FILE_SIZE;
 
-        // Only download if not already cached
-        if (targetModel?.status !== "downloaded" && targetModel?.status !== "loaded") {
-          console.log("Model not cached, downloading...");
-          await ModelManager.downloadModel(modelId);
-        } else {
-          console.log("Model already cached, skipping download");
+          if (!isModelCached) {
+            console.log("Model not found in OPFS, downloading...");
+            setStatus("Downloading model...");
+            await ModelManager.downloadModel(modelId);
+          } else {
+            console.log(
+              `Model already in OPFS (${(storageInfo.totalSize / 1024 / 1024).toFixed(1)} MB), skipping download`
+            );
+            setProgress(100);
+          }
+
+          setStatus("Loading model into memory...");
+          // n_ctx: 2048 keeps the KV-cache small enough to fit in the WASM
+          // linear memory. The default 8192 triggers a ~2 GB allocation that
+          // always fails in the browser, so this is required, not optional.
+          await ModelManager.loadModel(modelId)
+
+          setStatus("Offline AI Ready!");
           setProgress(100);
+        } catch (err) {
+          console.error("Initialization error:", err);
+          setStatus("Error: " + (err as Error).message);
+          // Reset so the user can retry by refreshing
+          _setupPromise = null;
+          throw err;
         }
+      })();
+    }
 
-        // 3. Load model (with memory optimizations)
-        // Keeping n_ctx at 2048 prevents browser crashes
-        setStatus("Loading model into memory...");
-        await ModelManager.loadModel(modelId);
-        // ,{
-        //   n_ctx: 2048, // Context size limited to prevent buffer overrun
-        //   n_gpu_layers: -1, // Full WebGPU acceleration
-        // } );
+    _setupPromise
+      .then(() => setReady(true))
+      .catch(() => {/* error already shown in status */});
 
-        setStatus("Offline AI Ready!");
-        setReady(true);
-        setProgress(100);
-      } catch (err) {
-        console.error("Initialization error:", err);
-        setStatus("Error: " + (err as Error).message);
-      }
-    };
-
-    setup();
-
-    // Cleanup listener on unmount
+    // Cleanup: unsubscribe the event listener when the component unmounts
     return () => {
-      if (unsubscribe) unsubscribe();
+      if (listenerRef.current) {
+        listenerRef.current();
+        listenerRef.current = null;
+      }
     };
   }, []);
 
@@ -120,7 +146,6 @@ function App() {
           Status: {status}
         </p>
 
-        {/* Progress Bar UI */}
         {progress > 0 && progress < 100 && (
           <div
             style={{
