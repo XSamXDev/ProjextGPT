@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { ModelManager, EventBus } from "@runanywhere/web";
 import { TextGeneration } from "@runanywhere/web-llamacpp";
-import { initSDK } from "./runanywhere";
+import { initSDK } from "../services/runanywhere";
 
 // Syntax Highlighting Imports (from previous steps)
 import Editor from "react-simple-code-editor";
