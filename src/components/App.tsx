@@ -84,7 +84,7 @@ function App() {
     if (!response) return;
     try {
       await navigator.clipboard.writeText(response);
-      setCopyStatus("Copied! ✅");
+      setCopyStatus("Copied!");
       setTimeout(() => setCopyStatus("Copy Code"), 2000);
     } catch (err) {
       console.log(err);
