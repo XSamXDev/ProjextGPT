@@ -84,7 +84,7 @@ function App() {
     if (!response) return;
     try {
       await navigator.clipboard.writeText(response);
-      setCopyStatus("Copied! ✅");
+      setCopyStatus("Copied!");
       setTimeout(() => setCopyStatus("Copy Code"), 2000);
     } catch (err) {
       console.log(err);
@@ -366,7 +366,7 @@ function App() {
             >
               {response ||
                 (ready
-                  ? "Your results will appear here."
+                  ? "Your results will soon appear here."
                   : "AI is initializing locally...")}
             </div>
           </div>
