@@ -77,11 +77,16 @@ ProjextGPT-temp/
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd ProjextGPT-temp
+git clone https://github.com/XSamXDev/ProjextGPT.git
 ```
 
-2. Install dependencies:
+2.  Change the directory to cloned folder:
+```bash
+cd ProjextGPT
+```
+
+
+3. Install dependencies:
 ```bash
 npm install
 ```
