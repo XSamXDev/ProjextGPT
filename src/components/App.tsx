@@ -13,23 +13,47 @@ import "prismjs/components/prism-java";
 
 let _setupPromise: Promise<void> | null = null;
 
+const MODEL_ID = "lfm2-1.2b-tool-q4_k_m";
+const MODEL_NAME = "LFM2 1.2B Tool";
+const MODEL_REPO = "LiquidAI/LFM2-1.2B-Tool-GGUF";
+const MODEL_FILE = "LFM2-1.2B-Tool-Q4_K_M.gguf";
+const CACHE_KEY = `runanywhere_downloaded_${MODEL_ID}`;
+
+type ModelStatus = "idle" | "downloading" | "loading" | "ready" | "error";
+
 function App() {
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState("Initializing SDK...");
   const [code, setCode] = useState("");
   const [response, setResponse] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [copyStatus, setCopyStatus] = useState("Copy Code");
+  const [modelStatus, setModelStatus] = useState<ModelStatus>("idle");
+  const [isCached, setIsCached] = useState(false);
+  const [showModelPanel, setShowModelPanel] = useState(false);
 
-  const [, setIsModelCached] = useState<boolean | null>(null);
   const listenerRef = useRef<(() => void) | null>(null);
-
-  // ── Cancel flag ──────────────────────────────────────────────────────────
   const cancelRef = useRef(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showModelPanel) return;
+    const handler = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setShowModelPanel(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showModelPanel]);
 
   useEffect(() => {
+    setIsCached(localStorage.getItem(CACHE_KEY) === "true");
+
     if (!listenerRef.current) {
       const unsubscribe = EventBus.shared.on(
         "model.downloadProgress",
@@ -37,36 +61,54 @@ function App() {
           const p = Math.round((evt.progress ?? 0) * 100);
           setProgress(p);
           setStatus(`Downloading AI Model: ${p}%`);
+          setModelStatus("downloading");
         },
       );
       listenerRef.current = unsubscribe;
     }
-
-    const modelId = "lfm2-350m-q4_k_m";
 
     if (!_setupPromise) {
       _setupPromise = (async () => {
         try {
           await initSDK();
           setStatus("Checking local assets...");
-          const storageInfo = await ModelManager.getStorageInfo();
-          const MODEL_FILE_SIZE = 229_309_376;
-          const isCached = storageInfo.totalSize >= MODEL_FILE_SIZE;
-          setIsModelCached(isCached);
 
-          if (!isCached) {
-            setStatus("Preparing initial download...");
-            await ModelManager.downloadModel(modelId);
-          } else {
-            setProgress(100);
+          const alreadyCached = localStorage.getItem(CACHE_KEY) === "true";
+
+          if (!alreadyCached) {
+            setStatus("Downloading model (first time only)...");
+            setModelStatus("downloading");
+            await ModelManager.downloadModel(MODEL_ID);
+            localStorage.setItem(CACHE_KEY, "true");
+            setIsCached(true);
           }
 
+          setProgress(100);
           setStatus("Loading AI Intelligence...");
-          await ModelManager.loadModel(modelId);
+          setModelStatus("loading");
+
+          try {
+            await ModelManager.loadModel(MODEL_ID);
+          } catch {
+            localStorage.removeItem(CACHE_KEY);
+            setIsCached(false);
+            setStatus("Re-downloading model...");
+            setModelStatus("downloading");
+            setProgress(0);
+            await ModelManager.downloadModel(MODEL_ID);
+            localStorage.setItem(CACHE_KEY, "true");
+            setIsCached(true);
+            setProgress(100);
+            setModelStatus("loading");
+            await ModelManager.loadModel(MODEL_ID);
+          }
+
           setStatus("AI Assistant Ready");
+          setModelStatus("ready");
         } catch (err) {
           console.error("Initialization failed:", err);
           setStatus("Initialization failed.");
+          setModelStatus("error");
           _setupPromise = null;
         }
       })();
@@ -82,7 +124,7 @@ function App() {
     };
   }, []);
 
-  // Copy functionality
+  // ── Copy ─────────────────────────────────────────────────────────────────
   const handleCopy = async () => {
     if (!response) return;
     try {
@@ -95,45 +137,44 @@ function App() {
     }
   };
 
-  // ── Cancel handler ────────────────────────────────────────────────────────
+  // ── Cancel ────────────────────────────────────────────────────────────────
   const handleCancel = () => {
     cancelRef.current = true;
+    setIsCancelling(true);
   };
 
-  // Dynamic Processing Messages
+  // ── Processing label ──────────────────────────────────────────────────────
   const getProcessingMessage = () => {
+    if (isCancelling) return "⏳ Cancelling generation...";
     switch (activeAction) {
-      case "generate":
-        return "Assistant is generating code...";
-      case "debug":
-        return "Assistant is debugging your code...";
-      case "explain":
-        return "Assistant is explaining the logic...";
-      case "optimize":
-        return "Assistant is optimizing performance...";
-      default:
-        return "Assistant is thinking...";
+      case "generate": return "Assistant is generating code...";
+      case "debug":    return "Assistant is debugging your code...";
+      case "explain":  return "Assistant is explaining the logic...";
+      case "optimize": return "Assistant is optimizing performance...";
+      default:         return "Assistant is thinking...";
     }
   };
 
+  // ── Main action ───────────────────────────────────────────────────────────
   const handleAction = useCallback(
     async (actionType: string) => {
       if (!code.trim() && actionType !== "generate") return;
 
       setResponse("");
       setIsProcessing(true);
+      setIsCancelling(false);
       setActiveAction(actionType);
-      cancelRef.current = false; // reset on every new request
+      cancelRef.current = false;
 
       let prompt = "";
       if (actionType === "generate") {
-        prompt = `Task: Generate functional code for the following request. Provide ONLY the code. Never use comments bactics etc.\n\nRequest: ${code}\n\nAssistant (Code Only):`;
+        prompt = `Task: Generate functional code for the following request. Provide ONLY the code. Never use comments backticks etc.\n\nRequest: ${code}\n\nAssistant (Code Only):`;
       } else if (actionType === "debug") {
-        prompt = `Task: Identify and fix bugs. Explain errors and provide corrected code. dont use comments backticks aestrisks etc.never give wrong answers if you dont know about it.\n\nCode:\n${code}\n\nAssistant:`;
+        prompt = `Task: Identify and fix bugs. Explain errors and provide corrected code. Dont use comments backticks asterisks etc. Never give wrong answers if you dont know about it.\n\nCode:\n${code}\n\nAssistant:`;
       } else if (actionType === "explain") {
-        prompt = `Task: Explain the logic step-by-step in simple terms.dont use comments backticks aestrisks etc.never give wrong answers if you dont know about it.\n\nCode:\n${code}\n\nAssistant:`;
+        prompt = `Task: Explain the logic step-by-step in simple terms. Dont use comments backticks asterisks etc. Never give wrong answers if you dont know about it.\n\nCode:\n${code}\n\nAssistant:`;
       } else if (actionType === "optimize") {
-        prompt = `Task: Improve performance and readability. Provide optimized code.never give wrong answers if you dont know about it.dont use comments backticks aestrisks etc.\n\nCode:\n${code}\n\nAssistant:`;
+        prompt = `Task: Improve performance and readability. Provide optimized code. Never give wrong answers if you dont know about it. Dont use comments backticks asterisks etc.\n\nCode:\n${code}\n\nAssistant:`;
       }
 
       try {
@@ -144,7 +185,6 @@ function App() {
 
         let fullText = "";
         for await (const token of stream) {
-          // ── Check cancel flag on every token ──────────────────────────────
           if (cancelRef.current) {
             setResponse(fullText + "\n\n[Generation cancelled]");
             break;
@@ -158,12 +198,29 @@ function App() {
         }
       } finally {
         setIsProcessing(false);
+        setIsCancelling(false);
         cancelRef.current = false;
         setTimeout(() => setActiveAction(null), 500);
       }
     },
     [code],
   );
+
+  const modelStatusColor: Record<ModelStatus, string> = {
+    idle:        "#94a3b8",
+    downloading: "#fbbf24",
+    loading:     "#818cf8",
+    ready:       "#4ade80",
+    error:       "#f87171",
+  };
+
+  const modelStatusLabel: Record<ModelStatus, string> = {
+    idle:        "Idle",
+    downloading: `Downloading ${progress}%`,
+    loading:     "Loading",
+    ready:       "Loaded & Active",
+    error:       "Error",
+  };
 
   return (
     <div
@@ -174,6 +231,7 @@ function App() {
         transition: "all 0.3s ease",
       }}
     >
+      {/* ── Navbar ── */}
       <nav
         className="glass"
         style={{
@@ -200,6 +258,205 @@ function App() {
           <span style={{ fontSize: "0.7rem", opacity: 0.6 }}>
             Offline Code Intelligence
           </span>
+        </div>
+
+        {/* ── Center: Model Badge ── */}
+        <div ref={panelRef} style={{ position: "relative" }}>
+          <button
+            onClick={() => setShowModelPanel((v) => !v)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              background: "rgba(99,102,241,0.1)",
+              border: "1px solid rgba(99,102,241,0.3)",
+              borderRadius: "20px",
+              padding: "6px 14px",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+          >
+            {/* Animated dot */}
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: modelStatusColor[modelStatus],
+                display: "inline-block",
+                boxShadow: modelStatus === "ready"
+                  ? `0 0 6px ${modelStatusColor[modelStatus]}`
+                  : "none",
+                animation: modelStatus === "downloading" || modelStatus === "loading"
+                  ? "pulse 1.2s infinite"
+                  : "none",
+              }}
+            />
+            <span style={{ fontSize: "0.8rem", color: "#cbd5e1", fontWeight: 500 }}>
+              {MODEL_NAME}
+            </span>
+            <span
+              style={{
+                fontSize: "0.7rem",
+                color: modelStatusColor[modelStatus],
+                fontWeight: 600,
+              }}
+            >
+              {modelStatusLabel[modelStatus]}
+            </span>
+            <span style={{ fontSize: "0.65rem", opacity: 0.5, marginLeft: 2 }}>
+              {showModelPanel ? "▲" : "▼"}
+            </span>
+          </button>
+
+          {/* ── Dropdown Panel ── */}
+          {showModelPanel && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 10px)",
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 300,
+                padding: "1rem 1.2rem",
+                borderRadius: "12px",
+                background: "#0f172a",
+                border: "1px solid rgba(99,102,241,0.35)",
+                zIndex: 200,
+                animation: "fadeIn 0.2s ease",
+                boxShadow: "0 8px 40px rgba(0,0,0,0.7)",
+              }}
+            >
+              {/* Header */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "0.75rem",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    letterSpacing: "0.08em",
+                    color: "#818cf8",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Downloaded Model
+                </span>
+                <span
+                  style={{
+                    fontSize: "0.68rem",
+                    padding: "2px 8px",
+                    borderRadius: "10px",
+                    background: modelStatus === "ready"
+                      ? "rgba(74,222,128,0.15)"
+                      : "rgba(251,191,36,0.12)",
+                    color: modelStatusColor[modelStatus],
+                    fontWeight: 600,
+                    border: `1px solid ${modelStatusColor[modelStatus]}44`,
+                  }}
+                >
+                  {modelStatusLabel[modelStatus]}
+                </span>
+              </div>
+
+              {/* Model Info Rows */}
+              {[
+                { label: "Model",      value: MODEL_NAME },
+                { label: "ID",         value: MODEL_ID },
+                { label: "File",       value: MODEL_FILE },
+                { label: "Repo",       value: MODEL_REPO },
+                { label: "Framework",  value: "llama.cpp" },
+                { label: "Quantize",   value: "Q4_K_M" },
+                { label: "Parameters", value: "1.2B" },
+                { label: "VRAM est.",  value: "~800 MB" },
+                {
+                  label: "Cached",
+                  value: isCached ? "✓ Yes (local)" : "✗ Not cached",
+                  valueColor: isCached ? "#4ade80" : "#f87171",
+                },
+              ].map(({ label, value, valueColor }) => (
+                <div
+                  key={label}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "5px 0",
+                    borderBottom: "1px solid rgba(255,255,255,0.05)",
+                    fontSize: "0.78rem",
+                  }}
+                >
+                  <span style={{ color: "#64748b", fontWeight: 500 }}>{label}</span>
+                  <span
+                    style={{
+                      color: valueColor ?? "#cbd5e1",
+                      fontFamily: label === "ID" || label === "File" ? "monospace" : "inherit",
+                      fontSize: label === "ID" || label === "File" ? "0.72rem" : "0.78rem",
+                      maxWidth: 170,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      textAlign: "right",
+                    }}
+                  >
+                    {value}
+                  </span>
+                </div>
+              ))}
+
+              {/* Download progress bar (visible while downloading) */}
+              {modelStatus === "downloading" && (
+                <div style={{ marginTop: "0.75rem" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: "0.72rem",
+                      color: "#94a3b8",
+                      marginBottom: 4,
+                    }}
+                  >
+                    <span>Download progress</span>
+                    <span>{progress}%</span>
+                  </div>
+                  <div
+                    style={{
+                      height: 6,
+                      background: "#1e293b",
+                      borderRadius: 4,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${progress}%`,
+                        height: "100%",
+                        background: "linear-gradient(90deg, #6366f1, #c084fc)",
+                        borderRadius: 4,
+                        transition: "width 0.3s ease",
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div
+                style={{
+                  marginTop: "0.75rem",
+                  fontSize: "0.68rem",
+                  color: "#475569",
+                  textAlign: "center",
+                }}
+              >
+                Runs 100% locally · No data sent to servers
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ textAlign: "right" }}>
@@ -237,6 +494,7 @@ function App() {
         </div>
       </nav>
 
+      {/* ── Main ── */}
       <main
         style={{
           flex: 1,
@@ -250,6 +508,7 @@ function App() {
           boxSizing: "border-box",
         }}
       >
+        {/* ── Input ── */}
         <section
           style={{
             display: "flex",
@@ -283,8 +542,7 @@ function App() {
                 onClick={() => handleAction("generate")}
                 disabled={!ready || isProcessing}
                 style={{
-                  background:
-                    "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+                  background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
                   border: "none",
                 }}
               >
@@ -292,6 +550,7 @@ function App() {
               </button>
             </div>
           </div>
+
           <div
             className="glass code-editor-container"
             style={{ transition: "transform 0.2s ease" }}
@@ -314,6 +573,7 @@ function App() {
           </div>
         </section>
 
+        {/* ── Output ── */}
         <section
           style={{
             display: "flex",
@@ -333,25 +593,29 @@ function App() {
               Output
             </h3>
 
-            {/* ── Buttons: Cancel (during processing) OR Copy (after done) ── */}
             <div style={{ display: "flex", gap: "0.5rem" }}>
               {isProcessing && (
                 <button
                   onClick={handleCancel}
+                  disabled={isCancelling}
                   style={{
                     fontSize: "0.75rem",
                     padding: "4px 12px",
-                    background: "rgba(239,68,68,0.15)",
+                    background: isCancelling
+                      ? "rgba(239,68,68,0.07)"
+                      : "rgba(239,68,68,0.15)",
                     border: "1px solid rgba(239,68,68,0.45)",
                     borderRadius: "8px",
-                    color: "#f87171",
-                    cursor: "pointer",
+                    color: isCancelling ? "rgba(248,113,113,0.45)" : "#f87171",
+                    cursor: isCancelling ? "not-allowed" : "pointer",
+                    transition: "all 0.2s ease",
                     animation: "fadeIn 0.2s ease",
                   }}
                 >
-                  ✕ Cancel
+                  {isCancelling ? "⏳ Cancelling..." : "✕ Cancel"}
                 </button>
               )}
+
               {response && !isProcessing && (
                 <button
                   onClick={handleCopy}
@@ -386,10 +650,11 @@ function App() {
             {isProcessing && (
               <div
                 style={{
-                  color: "#818cf8",
+                  color: isCancelling ? "#f87171" : "#818cf8",
                   marginBottom: "1rem",
                   fontStyle: "italic",
                   animation: "pulse 1.5s infinite",
+                  transition: "color 0.3s ease",
                 }}
               >
                 {getProcessingMessage()}
