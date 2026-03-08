@@ -26,6 +26,9 @@ function App() {
   const [, setIsModelCached] = useState<boolean | null>(null);
   const listenerRef = useRef<(() => void) | null>(null);
 
+  // ── Cancel flag ──────────────────────────────────────────────────────────
+  const cancelRef = useRef(false);
+
   useEffect(() => {
     if (!listenerRef.current) {
       const unsubscribe = EventBus.shared.on(
@@ -88,9 +91,13 @@ function App() {
       setTimeout(() => setCopyStatus("Copy Code"), 2000);
     } catch (err) {
       console.log(err);
-
       setCopyStatus("Failed ❌");
     }
+  };
+
+  // ── Cancel handler ────────────────────────────────────────────────────────
+  const handleCancel = () => {
+    cancelRef.current = true;
   };
 
   // Dynamic Processing Messages
@@ -116,6 +123,7 @@ function App() {
       setResponse("");
       setIsProcessing(true);
       setActiveAction(actionType);
+      cancelRef.current = false; // reset on every new request
 
       let prompt = "";
       if (actionType === "generate") {
@@ -136,14 +144,21 @@ function App() {
 
         let fullText = "";
         for await (const token of stream) {
+          // ── Check cancel flag on every token ──────────────────────────────
+          if (cancelRef.current) {
+            setResponse(fullText + "\n\n[Generation cancelled]");
+            break;
+          }
           fullText += token;
           setResponse(fullText);
         }
       } catch (err) {
-        setResponse("Generation Error: " + err);
+        if (!cancelRef.current) {
+          setResponse("Generation Error: " + err);
+        }
       } finally {
         setIsProcessing(false);
-        // Processing khatam hone ke thodi der baad action reset karein animation ke liye
+        cancelRef.current = false;
         setTimeout(() => setActiveAction(null), 500);
       }
     },
@@ -317,20 +332,42 @@ function App() {
             <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 500 }}>
               Output
             </h3>
-            {response && (
-              <button
-                onClick={handleCopy}
-                style={{
-                  fontSize: "0.75rem",
-                  padding: "4px 12px",
-                  background: "rgba(99, 102, 241, 0.2)",
-                  border: "1px solid rgba(99, 102, 241, 0.4)",
-                }}
-              >
-                {copyStatus}
-              </button>
-            )}
+
+            {/* ── Buttons: Cancel (during processing) OR Copy (after done) ── */}
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              {isProcessing && (
+                <button
+                  onClick={handleCancel}
+                  style={{
+                    fontSize: "0.75rem",
+                    padding: "4px 12px",
+                    background: "rgba(239,68,68,0.15)",
+                    border: "1px solid rgba(239,68,68,0.45)",
+                    borderRadius: "8px",
+                    color: "#f87171",
+                    cursor: "pointer",
+                    animation: "fadeIn 0.2s ease",
+                  }}
+                >
+                  ✕ Cancel
+                </button>
+              )}
+              {response && !isProcessing && (
+                <button
+                  onClick={handleCopy}
+                  style={{
+                    fontSize: "0.75rem",
+                    padding: "4px 12px",
+                    background: "rgba(99, 102, 241, 0.2)",
+                    border: "1px solid rgba(99, 102, 241, 0.4)",
+                  }}
+                >
+                  {copyStatus}
+                </button>
+              )}
+            </div>
           </div>
+
           <div
             className="glass"
             style={{
