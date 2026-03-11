@@ -309,9 +309,9 @@ function App() {
 
     const prompts: Record<string, string> = {
       generate: `Task: Generate functional code for the following request. Provide ONLY the code. Never use comments backticks etc.\n\nRequest: ${code}\n\nAssistant (Code Only):`,
-      debug:    `Task: Identify and fix bugs. Explain errors and provide corrected code. No comments, backticks, or asterisks.\n\nCode:\n${code}\n\nAssistant:`,
-      explain:  `Task: Explain the logic step-by-step in simple terms. No comments, backticks, or asterisks.\n\nCode:\n${code}\n\nAssistant:`,
-      optimize: `Task: Improve performance and readability. Provide optimized code. No comments, backticks, or asterisks.\n\nCode:\n${code}\n\nAssistant:`,
+      debug: `Task: Identify the programming language and fix bugs. Explain errors and provide corrected code. No comments, backticks, or asterisks.\n\nCode:\n${code}\n\nAssistant:`,
+      explain: `Task: Explain what this code does step by step. For each line or block, describe: 1) What it does, 2) Why it is there, 3) What would happen if it was removed. Use simple English. No backticks or asterisks.\n\nCode:\n${code}\n\nStep-by-step explanation:`,
+      optimize: `Task: Improve this code for better performance and readability. List each change you made and why it is better. Then provide the full optimized code. No backticks or asterisks.\n\nCode:\n${code}\n\nChanges made and optimized code:`,
     };
 
     try {
@@ -438,7 +438,7 @@ function App() {
                 { label: "Parameters", value: "1.2B" },
                 { label: "VRAM",       value: "~800 MB" },
                 { label: "Cached",     value: isCached ? "✓ Yes" : "✗ No", color: isCached ? "#00ff9d" : "#ff2d78" },
-              ].map(({ label, value, mono, color }) => (
+              ].map(({ label, value, color }) => (
                 <div key={label} style={{
                   display: "flex", justifyContent: "space-between", alignItems: "center",
                   padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.04)",
@@ -447,8 +447,8 @@ function App() {
                   <span style={{ color: "#6a9ab8", fontWeight: 500 }}>{label}</span>
                   <span style={{
                     color: color ?? "var(--text-secondary)",
-                    fontFamily: mono ? "var(--font-mono)" : "inherit",
-                    fontSize: mono ? "0.68rem" : "0.75rem",
+                    fontFamily:  "inherit",
+                    fontSize: "0.75rem",
                     maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis",
                     whiteSpace: "nowrap", textAlign: "right",
                   }}>{value}</span>
