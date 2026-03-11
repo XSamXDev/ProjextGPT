@@ -153,41 +153,6 @@ The `vite.config.ts` includes a custom plugin that:
 - **Memory Requirement**: ~800 MB VRAM
 - **Max Tokens**: 800 (configurable in code)
 
-## Configuration
-
-### Temperature Settings
-
-Located in `src/components/App.tsx`:
-- **Generate**: 0.5 (balanced creativity)
-- **Debug/Explain/Optimize**: 0.2 (more deterministic)
-
-### Model Parameters
-
-Located in `src/services/runanywhere.ts`:
-```typescript
-const MODELS: CompactModelDef[] = [
-  {
-    id: 'lfm2-1.2b-tool-q4_k_m',
-    name: 'LFM2 1.2B Tool',
-    repo: 'LiquidAI/LFM2-1.2B-Tool-GGUF',
-    files: ['LFM2-1.2B-Tool-Q4_K_M.gguf'],
-    framework: LLMFramework.LlamaCpp,
-    modality: ModelCategory.Language,
-    memoryRequirement: 800_000_000,
-  },
-]
-```
-
-### Vite Server Headers
-
-Required for SharedArrayBuffer (used by WASM):
-```typescript
-headers: {
-  'Cross-Origin-Opener-Policy': 'same-origin',
-  'Cross-Origin-Embedder-Policy': 'credentialless',
-}
-```
-
 ## Browser Compatibility
 
 - Chrome/Edge 95+ (recommended)
@@ -238,20 +203,6 @@ Contributions are welcome! Please ensure:
 - ESLint passes without errors
 - Test the build before submitting
 
-## License
-
-This project uses the following open-source components:
-- React (MIT License)
-- RunAnywhere SDK (check vendor license)
-- LFM2 Model (check Liquid AI license)
-- Prism.js (MIT License)
-
-## Acknowledgments
-
-- **Liquid AI** for the LFM2 model
-- **RunAnywhere** for the browser-based inference SDK
-- **llama.cpp** community for WASM implementation
-
 ## Future Enhancements
 
 - [ ] Support for additional models
@@ -265,7 +216,3 @@ This project uses the following open-source components:
 ## Status
 
 Currently in active development. This is a proof-of-concept demonstrating local AI inference for code assistance.
-
----
-
-**Built with passion for privacy-first AI tools**
