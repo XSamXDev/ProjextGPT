@@ -367,10 +367,10 @@ function App() {
             WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
             filter: "drop-shadow(0 0 8px rgba(0,212,255,0.25))",
           }}>
-            ProjextGPT
+            VibeForge AI
           </div>
           <div style={{ fontSize: "0.68rem", color: "#5a8aaa", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 2 }}>
-            Offline · Local · Private
+            Offline · Local · Private 
           </div>
         </div>
 
@@ -717,11 +717,11 @@ function App() {
         position: "relative", zIndex: 1,
         display: "flex", justifyContent: "center", alignItems: "center", gap: "1.5rem",
       }}>
-        <span>ProjextGPT</span>
+        <span>VibeForge AI</span>
         <span style={{ color: "rgba(0,212,255,0.2)" }}>◈</span>
-        <span>Made with <span style={{ color: "rgba(0,212,255,0.4)" }}>.....</span></span>
+        <span>Made with <span style={{ color: "rgba(0,212,255,0.4)" }}>❤️</span></span>
         <span style={{ color: "rgba(0,212,255,0.2)" }}>◈</span>
-        <span>Local · Offline · Private</span>
+        <span>Local · Offline · Private · AI Code Assistant</span>
       </footer>
 
       <style>{`

@@ -1,10 +1,10 @@
-# ProjextGPT
+# VibeForge AI
 
 An offline AI-powered code assistant that runs entirely in your browser with no server dependencies. Built with React, TypeScript, and RunAnywhere SDK for local AI inference.
 
 ## Overview
 
-ProjextGPT provides intelligent code assistance including code generation, debugging, optimization, and explanation - all running locally in your browser using WebAssembly. Your code never leaves your machine.
+VibeForge AI provides intelligent code assistance including code generation, debugging, optimization, and explanation - all running locally in your browser using WebAssembly. Your code never leaves your machine.
 
 ## Features
 
@@ -43,7 +43,7 @@ ProjextGPT provides intelligent code assistance including code generation, debug
 ## Project Structure
 
 ```
-ProjextGPT-temp/
+vibeforge-ai/
 ├── src/
 │   ├── components/
 │   │   └── App.tsx           # Main application component
@@ -77,12 +77,12 @@ ProjextGPT-temp/
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/XSamXDev/ProjextGPT.git
+git clone https://github.com/XSamXDev/vibeforge-ai.git
 ```
 
 2.  Change the directory to cloned folder:
 ```bash
-cd ProjextGPT
+cd vibeforge-ai
 ```
 
 
